@@ -42,7 +42,7 @@ func getSimulationFromDB(simulationId int) *Simulation {
     return &Simulation{
         Id: simulationId,
         Cluster: &Cluster{
-            Id: 1, // Dummy cluster ID
+            Id: rand.Intn(5), // Dummy cluster ID
             // ... other fields initialized as needed
         },
         // ... other fields initialized as needed
