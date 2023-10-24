@@ -13,8 +13,8 @@ func ClusterWorker() {
     for {
         cluster := popFromClusterQueue()
         if cluster == nil {
-			log.Println("Cluster is nil. Skipping iteration and checking queue again...")
-            continue // If the cluster is nil, skip the iteration and check the queue again
+			// log.Println("Cluster is nil. Skipping iteration and checking queue again...")
+            continue
         }
 		log.Printf("Retrieved cluster with ID %d from ClusterQueue.", cluster.Id)
        
@@ -42,6 +42,14 @@ func ClusterWorker() {
 
         cluster.SetReady()
 		log.Printf("Cluster with ID %d is ready.", cluster.Id)
+		// for each simulation associated with the cluster, add it to the sim queue
+		simulation := getSimulationFromDB(cluster.Id) // filter by sims waiting to be run
+
+		// if err != nil {
+		// 	log.Printf("Error: Invalid simulationId: %s", simulationId)
+		// 	return
+		// }
+		addToSimulationQueue(simulation)
         cluster.Mutex.Unlock()
     }
 }
@@ -50,14 +58,13 @@ func SimulationWorker(clusterId int) {
     for {
         simulation := popFromSimulationQueue(clusterId)
         if simulation == nil {
-            continue // If the simulation is nil, skip the iteration and check the queue again
+            continue
         }
 
         simulation.Cluster.Mutex.Lock()
 
         DummyExecuteSimulation(simulation)
 
-        // After simulation is complete, kick off DSP
         DummyStartDSP(simulation)
 
         simulation.Cluster.Mutex.Unlock()

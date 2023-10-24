@@ -25,7 +25,6 @@ func RunSimulationEndpoint(w http.ResponseWriter, r *http.Request) {
     
     simulation := getSimulationFromDB(simulationId)
     
-    // Log the retrieved simulation details (assuming the simulation has a String() method or similar)
     log.Printf("Retrieved simulation: %s", simulation)
     
     simulation.Cluster.Mutex.Lock()
