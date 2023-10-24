@@ -1,7 +1,7 @@
 package main
 
 func main() {
-    InitializeRabbitMQ() 
+    InitializeRabbitMQConnection() 
     go ClusterWorker()
     StartAPI() 
 }

@@ -10,6 +10,13 @@ import (
 
 func ClusterWorker() {
 	log.Println("Starting ClusterWorker...")
+	defer conn.Close()
+
+	ch, err := conn.Channel()
+	if err != nil {
+		log.Fatalf("Failed to open a channel: %v", err)
+	}
+	defer ch.Close()
     for {
         cluster := popFromClusterQueue()
         if cluster == nil {
@@ -50,11 +57,19 @@ func ClusterWorker() {
 		// 	return
 		// }
 		addToSimulationQueue(simulation)
+		go SimulationWorker(cluster.Id)
         cluster.Mutex.Unlock()
     }
 }
 
 func SimulationWorker(clusterId int) {
+	defer conn.Close()
+
+	ch, err := conn.Channel()
+	if err != nil {
+		log.Fatalf("Failed to open a channel: %v", err)
+	}
+	defer ch.Close()
     for {
         simulation := popFromSimulationQueue(clusterId)
         if simulation == nil {
