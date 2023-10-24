@@ -1,53 +1,70 @@
 package main
 
 import (
-    // "math/rand"
-    "sync"
-    // "time"
+	// "math/rand"
+	"strconv"
+	"sync"
+
+	// "time"
 	"log"
 )
 
-
 func ClusterWorker() {
 	log.Println("Starting ClusterWorker...")
-	defer conn.Close()
 
 	ch, err := conn.Channel()
 	if err != nil {
 		log.Fatalf("Failed to open a channel: %v", err)
 	}
 	defer ch.Close()
-    for {
-        cluster := popFromClusterQueue()
-        if cluster == nil {
-			// log.Println("Cluster is nil. Skipping iteration and checking queue again...")
-            continue
-        }
-		log.Printf("Retrieved cluster with ID %d from ClusterQueue.", cluster.Id)
-       
 
-        cluster.Mutex.Lock()
+	msgs, err := ch.Consume(
+		"ClusterQueue", // queue name
+		"",             // consumer tag
+		false,          // auto-ack
+		false,          // exclusive
+		false,          // no local
+		false,          // no wait
+		nil,            // args
+	)
+	if err != nil {
+		log.Fatalf("Failed to register a consumer: %v", err)
+	}
 
-        // Use WaitGroup for parallelizable tasks
-        var wg sync.WaitGroup
+	for msg := range msgs {
+		clusterId, err := strconv.Atoi(string(msg.Body))
+		if err != nil {
+			log.Printf("Failed to convert clusterId: %v", err)
+			continue
+		}
+		log.Printf("Retrieved cluster with ID %d from ClusterQueue.", clusterId)
 
-        // Example parallel tasks: BootCluster, SetUpEnvironment
-        wg.Add(2)
-        go func() {
-            DummyBootCluster(cluster)
-            wg.Done()
-        }()
-        go func() {
-            DummySetUpEnvironment(cluster)
-            wg.Done()
-        }()
+		cluster := getClusterFromDB(clusterId)
+		if cluster == nil {
+			continue
+		}
 
-        wg.Wait()
+		cluster.Mutex.Lock()
+		// Use WaitGroup for parallelizable tasks
+		var wg sync.WaitGroup
 
-        // Example serial tasks after parallel tasks are done
-        DummyConfigureCluster(cluster)
+		// Example parallel tasks: BootCluster, SetUpEnvironment
+		wg.Add(2)
+		go func() {
+			DummyBootCluster(cluster)
+			wg.Done()
+		}()
+		go func() {
+			DummySetUpEnvironment(cluster)
+			wg.Done()
+		}()
 
-        cluster.SetReady()
+		wg.Wait()
+
+		// Example serial tasks after parallel tasks are done
+		DummyConfigureCluster(cluster)
+
+		cluster.SetReady()
 		log.Printf("Cluster with ID %d is ready.", cluster.Id)
 		// for each simulation associated with the cluster, add it to the sim queue
 		simulation := getSimulationFromDB(cluster.Id) // filter by sims waiting to be run
@@ -58,31 +75,60 @@ func ClusterWorker() {
 		// }
 		addToSimulationQueue(simulation)
 		go SimulationWorker(cluster.Id)
-        cluster.Mutex.Unlock()
-    }
+		cluster.Mutex.Unlock()
+		// Acknowledge the message once processing is complete.
+		msg.Ack(false)
+	}
 }
 
 func SimulationWorker(clusterId int) {
-	defer conn.Close()
+	log.Println("Starting SimulationWorker for cluster", clusterId)
 
 	ch, err := conn.Channel()
 	if err != nil {
 		log.Fatalf("Failed to open a channel: %v", err)
 	}
 	defer ch.Close()
-    for {
-        simulation := popFromSimulationQueue(clusterId)
-        if simulation == nil {
-            continue
-        }
 
-        simulation.Cluster.Mutex.Lock()
+	queueName := "SimulationQueue_" + strconv.Itoa(clusterId)
 
-        DummyExecuteSimulation(simulation)
+	msgs, err := ch.Consume(
+		queueName, // queue name
+		"",        // consumer tag
+		false,     // auto-ack
+		false,     // exclusive
+		false,     // no local
+		false,     // no wait
+		nil,       // args
+	)
+	if err != nil {
+		log.Fatalf("Failed to register a consumer: %v", err)
+	}
 
-        DummyStartDSP(simulation)
+	for msg := range msgs {
+		simulationId, err := strconv.Atoi(string(msg.Body))
+		if err != nil {
+			log.Printf("Failed to convert simulationId: %v", err)
+			continue
+		}
+		log.Printf("Retrieved simulation with ID %d from SimulationQueue.", simulationId)
+
+		simulation := getSimulationFromDB(simulationId)
+		if simulation == nil {
+			continue
+		}
+
+		simulation.Cluster.Mutex.Lock()
+
+		DummyExecuteSimulation(simulation)
+
+		DummyStartDSP(simulation)
 
 		log.Printf("Sim %s complete!", simulation.Id)
-        simulation.Cluster.Mutex.Unlock()
-    }
+
+		simulation.Cluster.Mutex.Unlock()
+
+		// Acknowledge the message once processing is complete.
+		msg.Ack(false)
+	}
 }
