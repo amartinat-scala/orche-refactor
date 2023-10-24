@@ -36,7 +36,7 @@ func getSimulationFromDB(simulationId int) *Simulation {
     return &Simulation{
         Id: simulationId,
         Cluster: &Cluster{
-            Id: rand.Intn(5),
+            Id: simulationId,
         },
     }
 }
