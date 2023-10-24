@@ -82,6 +82,7 @@ func SimulationWorker(clusterId int) {
 
         DummyStartDSP(simulation)
 
+		log.Printf("Sim %s complete!", simulation.Id)
         simulation.Cluster.Mutex.Unlock()
     }
 }
