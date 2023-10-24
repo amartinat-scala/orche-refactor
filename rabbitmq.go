@@ -30,13 +30,22 @@ func addToClusterQueue(cluster *Cluster) {
     defer ch.Close()
 	log.Printf("Adding cluster with ID %d to ClusterQueue...", cluster.Id)
     body := strconv.Itoa(cluster.Id) 
-    err = ch.Publish("", "ClusterQueue", false, false, amqp.Publishing{
-        ContentType: "text/plain",
-        Body:        []byte(body), 
-    })
+	_, err = ch.QueueDeclare(
+		"ClusterQueue",  // name
+		true,       // durable
+		false,      // delete when unused
+		false,      // exclusive
+		false,      // no-wait
+		nil,        // arguments
+	)
     if err != nil {
         log.Printf("Failed to publish a message: %v", err)
     }
+    err = ch.Publish("", "ClusterQueue", false, false, amqp.Publishing{
+        ContentType: "text/plain",
+        Body:        []byte(body), 
+		DeliveryMode: amqp.Persistent,
+    })
 	log.Println("Cluster added to ClusterQueue successfully.")
 }
 
@@ -70,6 +79,7 @@ func addToSimulationQueue(simulation *Simulation) {
     err = ch.Publish("", queueName, false, false, amqp.Publishing{    
         ContentType: "text/plain",
         Body:        []byte(body), 
+		DeliveryMode: amqp.Persistent,
     })
     if err != nil {
         log.Printf("Failed to publish a message: %v", err)
